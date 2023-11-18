@@ -46,16 +46,6 @@ void Server::run()
         char* data = client->data();
         printf("-----RECV-----\n%s\n--------------\n", n > 0 ? data : "Error");
         const std::filesystem::path pathF(data);
-        if (std::filesystem::is_regular_file(pathF))
-        {
-            if (!std::filesystem::exists(".\\files\\" + pathF.filename().string()))
-            {
-                std::filesystem::copy_file(data, ".\\files\\" + pathF.filename().string());
-                std::cout << "The file has been sent to the server" << std::endl;
-            }
-            else
-                std::cout << "The file with this name already exists on the server" << std::endl;
-        }
         const std::vector<std::string>& tokens = split(data, " ");
         if (tokens.size() >= 2 && tokens[0] == "GET") // this is browser's request
         {
@@ -78,18 +68,8 @@ void Server::run()
                     }
                     file.close();
                 }
-                if (pathFile.extension() == ".png") {
-                    client->sendStr("HTTP/1.1 200 Okay\r\nContent-Type: image/png; Content-Transfer-Encoding: binary; Content-Length: " + toStr(text.length()) + ";charset=ISO-8859-4 \r\n\r\n" + text);
-                }
-                else if (pathFile.extension() == ".jpg") {
-                    client->sendStr("HTTP/1.1 200 Okay\r\nContent-Type: image/jpg; Content-Transfer-Encoding: binary; Content-Length: " + toStr(text.length()) + ";charset=ISO-8859-4 \r\n\r\n" + text);
-                }
-                else if (pathFile.extension() == ".gif") {
-                    client->sendStr("HTTP/1.1 200 Okay\r\nContent-Type: image/gif; Content-Transfer-Encoding: binary; Content-Length: " + toStr(text.length()) + ";charset=ISO-8859-4 \r\n\r\n" + text);
-                }
-                else if (pathFile.extension() == ".bmp") {
-                    client->sendStr("HTTP/1.1 200 Okay\r\nContent-Type: image/bmp; Content-Transfer-Encoding: binary; Content-Length: " + toStr(text.length()) + ";charset=ISO-8859-4 \r\n\r\n" + text);
-                }
+                std::string extention = pathFile.extension().generic_string();
+                client->sendStr("HTTP/1.1 200 Okay\r\nContent-Type: image/"+ extention.substr(1, extention.length()) +"; Content - Transfer - Encoding: binary; Content - Length: " + toStr(text.length()) + "; charset = ISO - 8859 - 4 \r\n\r\n" + text);
             }
             // convert URL to file system path, e.g. request to img/1.png resource becomes request to .\img\1.png file in Server's directory tree
             
@@ -117,18 +97,37 @@ void Server::run()
                     }
                 };
         }
-        else if (n > 0) // this is Client's request who wants to upload some data
+        else if (tokens.size() >=2 && tokens[0] == "POST")
         {
-            if (std::filesystem::is_regular_file(pathF))
+            if (tokens[1] == "file")
             {
-                m_data.push_back(".\\files\\" + pathF.filename().string());
+                std::filesystem::path path(".\\files\\" + tokens[2]);
+				if (!std::filesystem::exists(path))
+				{
+					std::ofstream file(path, std::ios_base::binary);
+                    if (file.is_open())
+                    {
+                        int offset = 0;
+                        for (int i = 0; i < 3; i++)
+                        {
+                            offset += tokens[i].length() + 1;
+                        }
+                        std::string fileBuffer = std::string(data).substr(offset, n-offset);
+                        file.write(data+offset, n-offset);
+                        file.close();
+                    }
+				}
+                else
+                    std::cout << "The file with this name already exists on the server" << std::endl;
+                m_data.push_back(".\\files\\" + path.filename().string());
+
             }
             else
             {
-                m_data.push_back(data); // store it in the feed
+                m_data.push_back(tokens[1]); // store it in the feed
+                fileAppend("resources\\STATE", m_data.back() + "\n"); // store it in the file for subsequent runs
 
             }
-            fileAppend("resources\\STATE", m_data.back() + "\n"); // store it in the file for subsequent runs
         }
     }
 }
